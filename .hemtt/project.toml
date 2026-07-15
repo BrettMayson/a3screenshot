@@ -1,0 +1,12 @@
+name = "Screenshot"
+author = "Brett Mayson"
+prefix = "scr"
+mainprefix = "z"
+
+[files]
+include = [
+    "screenshot_x64.dll",
+]
+
+[version]
+git_hash = 0
