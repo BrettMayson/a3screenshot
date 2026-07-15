@@ -1,8 +1,10 @@
 use arma_rs::{arma, Extension};
-use windows::Win32::Graphics::Dxgi::Common::{DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM};
 use std::ffi::CString;
 use windows::core::{Interface as _, PCSTR};
 use windows::Win32::Graphics::Direct3D11::*;
+use windows::Win32::Graphics::Dxgi::Common::{
+    DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM,
+};
 use windows::Win32::System::LibraryLoader::{GetModuleHandleA, GetProcAddress};
 
 #[arma]
@@ -26,7 +28,6 @@ struct RVExtensionGraphicsLockGuard {
 #[repr(C)]
 struct RVExtensionGraphicsLockGuardVTable {
     release_lock: unsafe extern "C" fn(*mut RVExtensionGraphicsLockGuard),
-    // destructor might be here too
 }
 
 fn take() -> Option<()> {
@@ -45,17 +46,15 @@ fn take() -> Option<()> {
 
     let render_info = unsafe { **device_data_ptr };
 
-    // Cast raw pointers to COM interface objects using from_raw
     let device: ID3D11Device = unsafe {
         let ptr = render_info.d3d_device as *mut ID3D11Device;
         std::mem::transmute_copy(&ptr)
     };
-    
+
     let context: ID3D11DeviceContext = unsafe {
         let ptr = render_info.d3d_device_context as *mut ID3D11DeviceContext;
         std::mem::transmute_copy(&ptr)
     };
-
 
     unsafe {
         let mut render_targets = [None];
@@ -103,13 +102,13 @@ fn take() -> Option<()> {
                         rgb_data.push(chunk[2]); // R
                         rgb_data.push(chunk[1]); // G
                         rgb_data.push(chunk[0]); // B
-                    },
+                    }
                     DXGI_FORMAT_R8G8B8A8_UNORM => {
                         // RGBA: R, G, B, A
                         rgb_data.push(chunk[0]); // R
                         rgb_data.push(chunk[1]); // G
                         rgb_data.push(chunk[2]); // B
-                    },
+                    }
                     _ => {
                         return None;
                     }
