@@ -75,7 +75,10 @@ fn take() -> Option<()> {
         let mut staging: Option<ID3D11Texture2D> = None;
         device
             .CreateTexture2D(&staging_desc, None, Some(&mut staging))
-            .ok()?;
+            .map_err(|e| {
+                println!("CreateTexture2D failed: {:?}", e);
+                e
+            }).ok()?;
         let staging = staging?;
 
         context.CopyResource(&staging, &backbuffer);
