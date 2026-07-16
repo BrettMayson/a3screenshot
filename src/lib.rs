@@ -74,7 +74,7 @@ fn take() -> Option<()> {
 
         let mut staging: Option<ID3D11Texture2D> = None;
         device
-            .CreateTexture2D(&staging_desc, None, Some(&mut staging as *mut _ as *mut _))
+            .CreateTexture2D(&staging_desc, None, Some(&mut staging))
             .ok()?;
         let staging = staging?;
 
