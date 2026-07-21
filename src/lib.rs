@@ -134,8 +134,6 @@ fn take() -> Option<()> {
         let data =
             std::slice::from_raw_parts(mapped.pData as *const u8, row_pitch * height).to_vec();
 
-        context.Unmap(&staging, 0);
-
         let mut rgb_data = Vec::with_capacity(width * height * 3);
 
         for y in 0..height {
@@ -151,19 +149,19 @@ fn take() -> Option<()> {
                         rgb_data.push(row[i + 1]); // G
                         rgb_data.push(row[i]); // B
                     }
-
                     DXGI_FORMAT_R8G8B8A8_UNORM => {
                         rgb_data.push(row[i]); // R
                         rgb_data.push(row[i + 1]); // G
                         rgb_data.push(row[i + 2]); // B
                     }
-
                     _ => {
                         return None;
                     }
                 }
             }
         }
+
+        context.Unmap(&staging, 0);
 
         let img = image::RgbImage::from_raw(width as u32, height as u32, rgb_data)?;
         let filename = "screenshot.jpg";
