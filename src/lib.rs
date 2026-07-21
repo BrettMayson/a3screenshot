@@ -137,21 +137,27 @@ fn take() -> Option<()> {
         context.Unmap(&staging, 0);
 
         let mut rgb_data = Vec::with_capacity(width * height * 3);
-        for chunk in data.chunks(4) {
-            if chunk.len() >= 4 {
+
+        for y in 0..height {
+            let row_start = y * row_pitch;
+            let row = &data[row_start..row_start + width * 4];
+
+            for x in 0..width {
+                let i = x * 4;
+
                 match desc.Format {
                     DXGI_FORMAT_B8G8R8A8_UNORM => {
-                        // BGRA: B, G, R, A
-                        rgb_data.push(chunk[2]); // R
-                        rgb_data.push(chunk[1]); // G
-                        rgb_data.push(chunk[0]); // B
+                        rgb_data.push(row[i + 2]); // R
+                        rgb_data.push(row[i + 1]); // G
+                        rgb_data.push(row[i]); // B
                     }
+
                     DXGI_FORMAT_R8G8B8A8_UNORM => {
-                        // RGBA: R, G, B, A
-                        rgb_data.push(chunk[0]); // R
-                        rgb_data.push(chunk[1]); // G
-                        rgb_data.push(chunk[2]); // B
+                        rgb_data.push(row[i]); // R
+                        rgb_data.push(row[i + 1]); // G
+                        rgb_data.push(row[i + 2]); // B
                     }
+
                     _ => {
                         return None;
                     }
