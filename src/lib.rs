@@ -3,7 +3,7 @@ use std::ffi::CString;
 use windows::core::{Interface as _, PCSTR};
 use windows::Win32::Graphics::Direct3D11::*;
 use windows::Win32::Graphics::Dxgi::Common::{
-    DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM,
+    DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_SAMPLE_DESC,
 };
 use windows::Win32::System::LibraryLoader::{GetModuleHandleA, GetProcAddress};
 
@@ -30,19 +30,38 @@ struct RVExtensionGraphicsLockGuardVTable {
     release_lock: unsafe extern "C" fn(*mut RVExtensionGraphicsLockGuard),
 }
 
+struct GraphicsLockGuard {
+    ptr: *mut RVExtensionGraphicsLockGuard,
+}
+
+impl Drop for GraphicsLockGuard {
+    fn drop(&mut self) {
+        unsafe {
+            if !self.ptr.is_null() {
+                let vtable = (*self.ptr).vtable;
+                ((*vtable).release_lock)(self.ptr);
+            }
+        }
+    }
+}
+
 fn take() -> Option<()> {
     let device_data_ptr =
         unsafe { find_rv_function("RVExtensionGData") } as *const *const RVExtensionRenderInfo;
-    let gpu_lock_fn = unsafe { find_rv_function("RVExtensionGLock") } as *const ();
+    let gpu_lock_fn = unsafe { find_rv_function("RVExtensionGLock") };
 
     if device_data_ptr.is_null() || gpu_lock_fn.is_null() {
         return None;
     }
+    println!("Device data pointer: {:?}", device_data_ptr);
 
-    let lock_guard = unsafe {
-        let lock_fn: RVExtensionGLockProc = std::mem::transmute(gpu_lock_fn);
-        lock_fn()
+    let lock_guard = GraphicsLockGuard {
+        ptr: unsafe {
+            let lock_fn: RVExtensionGLockProc = std::mem::transmute(gpu_lock_fn);
+            lock_fn()
+        },
     };
+    println!("Lock guard pointer: {:?}", lock_guard.ptr);
 
     let render_info = unsafe { **device_data_ptr };
 
@@ -50,11 +69,13 @@ fn take() -> Option<()> {
         let ptr = render_info.d3d_device as *mut ID3D11Device;
         std::mem::transmute_copy(&ptr)
     };
+    println!("Device pointer: {:?}", device);
 
     let context: ID3D11DeviceContext = unsafe {
         let ptr = render_info.d3d_device_context as *mut ID3D11DeviceContext;
         std::mem::transmute_copy(&ptr)
     };
+    println!("Context pointer: {:?}", context);
 
     unsafe {
         let mut render_targets = [None];
@@ -65,20 +86,39 @@ fn take() -> Option<()> {
 
         let mut desc = D3D11_TEXTURE2D_DESC::default();
         backbuffer.GetDesc(&mut desc);
+        println!("Backbuffer description: {:?}", desc);
 
         let staging_desc = D3D11_TEXTURE2D_DESC {
+            Width: desc.Width,
+            Height: desc.Height,
+            MipLevels: 1,
+            ArraySize: 1,
+            Format: desc.Format,
+            // Staging resources must be non-MSAA.
+            SampleDesc: DXGI_SAMPLE_DESC {
+                Count: 1,
+                Quality: 0,
+            },
             Usage: D3D11_USAGE_STAGING,
+            // Staging resources cannot have bind flags.
+            BindFlags: 0,
             CPUAccessFlags: D3D11_CPU_ACCESS_READ.0 as u32,
-            ..desc
+            // Don't inherit misc flags from the backbuffer.
+            MiscFlags: 0,
         };
 
         let mut staging: Option<ID3D11Texture2D> = None;
+        println!(
+            "Creating staging texture with description: {:?}",
+            staging_desc
+        );
         device
-            .CreateTexture2D(&staging_desc, None, Some(&mut staging))
+            .CreateTexture2D(&staging_desc, None, Some(&mut staging as *mut _ as *mut _))
             .map_err(|e| {
                 println!("CreateTexture2D failed: {:?}", e);
                 e
-            }).ok()?;
+            })
+            .ok()?;
         let staging = staging?;
 
         context.CopyResource(&staging, &backbuffer);
@@ -123,13 +163,6 @@ fn take() -> Option<()> {
         let filename = "screenshot.jpg";
         img.save(filename).ok()?;
     };
-
-    unsafe {
-        if !lock_guard.is_null() {
-            let vtable = (*lock_guard).vtable;
-            ((*vtable).release_lock)(lock_guard);
-        }
-    }
 
     Some(())
 }
